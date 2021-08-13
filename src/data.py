@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Abstract class to represent Brazilian election."""
+"""Abstract class to represent Brazilian socioeconomic data."""
 import logging
 from dataclasses import dataclass
 from os import mkdir, listdir, remove, rename
@@ -9,10 +9,10 @@ from typing import List
 
 
 @dataclass
-class Census(ABC):
-    """Represents an Brazilian election.
+class Data(ABC):
+    """Represents an Brazilian socioeconomic data.
 
-    This class is responsible to organize in folders the election datasets.
+    This class is responsible to organize in folders the socioeconomic datasets.
 
     Attributes
     ----------
@@ -21,7 +21,7 @@ class Census(ABC):
         org  : str
             Name of the orgarnization where the data was collected
         year : str
-            Election year
+            data year
         root_path : str
             Root path
         cur_dir: str
@@ -74,7 +74,6 @@ class Census(ABC):
         self._mkdir(folder_name=self.region)
         self._mkdir(folder_name=self.org)
         self._mkdir(folder_name=self.year)
-        self._mkdir(folder_name=f"round_{self.round}")
         self._mkdir(folder_name=self.state)
 
     def _get_process_folder_path(self, state: str) -> str:
@@ -84,7 +83,6 @@ class Census(ABC):
             self.region,
             self.org,
             self.year,
-            "round_" + self.round,
             state,
         )
 
@@ -92,10 +90,10 @@ class Census(ABC):
         """Returns the initial folders path"""
         return join(self.root_path, self.region, self.org)
 
-    def _get_election_folders_path(self) -> str:
-        """Returns the election folders path"""
+    def _get_year_folders_path(self) -> str:
+        """Returns the year folders path"""
         return join(
-            self.root_path, self.region, self.org, self.year, "round_" + self.round
+            self.root_path, self.region, self.org, self.year
         )
 
     def _get_state_folders_path(self, state: str) -> str:
@@ -105,8 +103,7 @@ class Census(ABC):
             self.region,
             self.org,
             self.year,
-            "round_" + self.round,
-            state,
+            state
         )
 
     def _get_files_in_cur_dir(self) -> List[str]:
@@ -115,6 +112,14 @@ class Census(ABC):
             filename
             for filename in listdir(self.cur_dir)
             if isfile(join(self.cur_dir, filename))
+        ]
+        
+    def _get_folders_in_cur_dir(self) -> List[str]:
+        """Returns a list of folders in the current directory"""
+        return [
+            filename
+            for filename in listdir(self.cur_dir)
+            if not isfile(join(self.cur_dir, filename))
         ]
 
     def _get_files_in_id(self, directory: str) -> List[str]:

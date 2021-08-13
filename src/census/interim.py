@@ -6,7 +6,7 @@ from tqdm import tqdm
 import pandas as pd
 from pandas.api.types import is_numeric_dtype
 from pandas_profiling import ProfileReport
-from src.election import Election
+from src.data import Data
 
 
 MAP_CANDIDACY = {"president": 1, "governor": 3}
@@ -38,7 +38,7 @@ MAP_COL_RENAME = {
 
 
 @dataclass
-class Interim(Election):
+class Interim(Data):
     """Represents the Brazilian election results in interim state of processing.
 
     This object pre-processes the Brazilian election results.

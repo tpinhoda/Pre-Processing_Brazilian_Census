@@ -54,16 +54,11 @@ def main():
     # Load paramenters
     params = load_json(os.path.join(project_dir, "parameters", "parameters.json"))
     params["global"]["root_path"] = env_var["root_path"]
-    params["locations"]["api_key"] = env_var["api_key"]
     # Load switchers
     switchers = load_json(os.path.join(project_dir, "parameters", "switchers.json"))
     # Creates and run the location processing pipeline
-    pipeline_locations = Pipeline("locations", params, switchers["locations"])
+    pipeline_locations = Pipeline("census", params, switchers["census"])
     pipeline_locations.run()
-    # Creates and run the results processing pipeline
-    pipeline_results = Pipeline("results", params, switchers["results"])
-    pipeline_results.run()
-
 
 if __name__ == "__main__":
     main()

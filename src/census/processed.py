@@ -4,11 +4,11 @@ from os.path import join
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional
 import pandas as pd
-from src.election import Election
+from src.data import Data
 
 
 @dataclass
-class Processed(Election):
+class Processed(Data):
     """Represents the Brazilian election results in processed state of processing.
 
     This object pre-processes the Brazilian election results.

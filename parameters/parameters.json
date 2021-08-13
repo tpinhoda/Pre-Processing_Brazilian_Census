@@ -2,10 +2,12 @@
     "global": {
         "region": "Brazil",
         "org": "IBGE",
+        "year": "2010",
         "aggregation_level": "city"
+        
     },
     "census": {
         "data_name": "census",
-        "year": "2010"
+        "url_data": "https://ftp.ibge.gov.br/Censos/Censo_Demografico_2010/Resultados_do_Universo/Agregados_por_Setores_Censitarios/"
     }   
 }
