@@ -1,31 +1,11 @@
 {
     "global": {
         "region": "Brazil",
-        "org": "TSE",
-        "year": "2018",
-        "round": "2",
-        "aggregation_level": "city",
-        "geocoding_api": "IBGE"
+        "org": "IBGE",
+        "aggregation_level": "city"
     },
-    "results": {
-        "data_name": "results",
-        "url_data": "https://www.tse.jus.br/hotsites/pesquisas-eleitorais/resultados_anos/boletim_urna/{}/boletim_urna_{}_turno.html",
-        "candidacy_pos": "president",
-        "candidates": [13, 17],
-        "levenshtein_threshold": 0.01,
-        "precision_filter": ["TSE", "ROOFTOP", "GEOMETRIC_CENTER", "RANGE_INTERPOLATED", "APPROXIMATE", "OSM", "IBGE"],
-        "city_limits_filter":["in", "boundary_0.01", "boundary_0.02", "boundary_0.03", "out"]
-    },
-    "locations": {
-        "data_name": "locations",
-        "url_data": "https://drive.google.com/uc?export=download&id=19kTCykQ4444xjkOj86sc0BdMMTpgkc3m",
-        "url_meshblock": "https://geoftp.ibge.gov.br/organizacao_do_territorio/malhas_territoriais/malhas_municipais/municipio_2018/Brasil/BR/br_municipios.zip",
-        "data_filename": "locations_by_sections.csv",
-        "meshblock_filename": "cities_meshblock.zip",
-        "save_at": 1000,
-        "meshblock_crs": 4674,
-        "meshblock_col_id": "CD_GEOCMU",
-        "city_buffers": [0.01, 0.02, 0.03]
-    }
-   
+    "census": {
+        "data_name": "census",
+        "year": "2010"
+    }   
 }

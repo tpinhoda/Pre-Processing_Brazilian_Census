@@ -9,7 +9,7 @@ from typing import List
 
 
 @dataclass
-class Election(ABC):
+class Census(ABC):
     """Represents an Brazilian election.
 
     This class is responsible to organize in folders the election datasets.
@@ -22,8 +22,6 @@ class Election(ABC):
             Name of the orgarnization where the data was collected
         year : str
             Election year
-        round : str
-            Election round
         root_path : str
             Root path
         cur_dir: str
@@ -36,7 +34,6 @@ class Election(ABC):
     region: str = None
     org: str = None
     year: str = None
-    round: str = None
     root_path: str = None
     data_name: str = None
     cur_dir: str = None

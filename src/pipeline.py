@@ -1,26 +1,17 @@
-"""Pipeline to process election data"""
+"""Pipeline to process IBGE data"""
 from dataclasses import dataclass, field
 from typing import Dict, Final, List
 import inspect
-from src.election import Election
-from src.results.raw import Raw as ResultsRaw
-from src.results.interim import Interim as ResultsInterim
-from src.results.processed import Processed as ResultsProcessed
-from src.locations.raw import Raw as LocationsRaw
-from src.locations.interim import Interim as LocationsInterim
-from src.locations.processed import Processed as LocationsProcessed
-
+from src.data import Data
+from src.census.raw import Raw as CensusRaw
+from src.census.interim import Interim as CensusInterim
+from src.census.processed import Processed as CensusProcessed
 
 DATA_PROCESS_MAP: Final = {
-    "results": {
-        "raw": ResultsRaw,
-        "interim": ResultsInterim,
-        "processed": ResultsProcessed,
-    },
-    "locations": {
-        "raw": LocationsRaw,
-        "interim": LocationsInterim,
-        "processed": LocationsProcessed,
+    "census": {
+        "raw": CensusRaw,
+        "interim": CensusInterim,
+        "processed": CensusProcessed,
     },
 }
 
@@ -45,9 +36,9 @@ class Pipeline:
     params: Dict[str, str] = field(default_factory=dict)
     switchers: Dict[str, str] = field(default_factory=dict)
     __pipeline: List[str] = field(default_factory=list)
-    __raw: Election = None
-    __interim: Election = None
-    __processed: Election = None
+    __raw: Data = None
+    __interim: Data = None
+    __processed: Data = None
 
     @staticmethod
     def _get_class_attributes(class_process):

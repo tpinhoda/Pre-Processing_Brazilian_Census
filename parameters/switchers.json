@@ -1,12 +1,11 @@
-{
-    "locations":{
-        "raw":0,
+    {"census":{
+        "raw":1,
         "interim":0,
         "processed":0
     },
-    "results":{
+    "idhm":{
         "raw":0,
-        "interim":1,
-        "processed":1
+        "interim":0,
+        "processed":0
     }
 }
