@@ -30,12 +30,12 @@ class Processed(Data):
     """
 
     aggregation_level: str = None
-    threshold_na: float = None
+    na_threshold: float = None
     __processed_data: pd.DataFrame = field(default_factory=pd.DataFrame)
     
     def _drop_duplicated_row_from_merge(self):
         delete_cols = [c for c in self.__processed_data.columns if "DELETE" in c]
-        self.__processed_data.drop(delete_cols, axis=1, inplace=True)  
+        self.__processed_data.drop(delete_cols, axis=1, inplace=True)
     
     def _merge_data(self):
         interim_path =self._get_data_name_folders_path("interim")
@@ -48,8 +48,17 @@ class Processed(Data):
             else:
                 self.__processed_data = interim_data.copy()
         self._drop_duplicated_row_from_merge()
+    
+    def _drop_cols_rows_na_all(self):
+        """Drop rows and columns with 100 NA values from raw data"""
+        threshold_na_row = int(self.na_threshold * len(self.__processed_data.columns) /100)
+        threshold_na_col = int(self.na_threshold * len(self.__processed_data) /100)
+        self.__processed_data.dropna(how="all", axis=0, thresh=threshold_na_row, inplace=True)
+        self.__processed_data.dropna(how="all", axis=1, thresh=threshold_na_col, inplace=True)
+    
+    def _fill_na(self):
+        self.__processed_data.fillna(0, inplace=True)
         
-
     def run(self):
         """Run processed process"""
         self.init_logger_name(msg="Census (Processed)")
@@ -59,9 +68,6 @@ class Processed(Data):
             folders=[self.data_name, self.aggregation_level]
         )
         self._merge_data()
-        print(len(self.__processed_data.columns.values))
-        print(len(self.__processed_data))
-        is_NaN = self.__processed_data.isnull()
-        row_has_NaN = is_NaN.any(axis=1)
-        rows_with_NaN = self.__processed_data[row_has_NaN]
-        print(len(rows_with_NaN))
+        self._drop_cols_rows_na_all()
+        
+        
