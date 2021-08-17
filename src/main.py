@@ -60,5 +60,6 @@ def main():
     pipeline_locations = Pipeline("census", params, switchers["census"])
     pipeline_locations.run()
 
+
 if __name__ == "__main__":
     main()

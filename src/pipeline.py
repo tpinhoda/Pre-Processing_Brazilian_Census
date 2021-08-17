@@ -1,4 +1,4 @@
-"""Pipeline to process IBGE data"""
+"""Pipeline to process Brazilian socioeconomic data"""
 from dataclasses import dataclass, field
 from typing import Dict, Final, List
 import inspect
@@ -20,7 +20,7 @@ DATA_PROCESS_MAP: Final = {
 class Pipeline:
     """Represents a pipeline to process data.
 
-    This object process Brazilian electoral data.
+    This object process socioeconomic data.
 
     Attributes
     ----------

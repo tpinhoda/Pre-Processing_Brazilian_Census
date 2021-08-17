@@ -1,39 +1,48 @@
 """Generates interim results data"""
-from os.path import join
-from typing import Dict, List
+import os
+import itertools
+from typing import List, Optional
 from dataclasses import dataclass, field
 from tqdm import tqdm
 import pandas as pd
-from pandas.api.types import is_numeric_dtype
-from pandas_profiling import ProfileReport
 from src.data import Data
 
 
-MAP_CANDIDACY = {"president": 1, "governor": 3}
+PREFIX_COL_CENSUS = "[CENSUS]"
+ENCODINGS = {"default": "mbcs", "encode_1": "utf-8", "encode_2": "latin"}
+SEPS = {"default": ";", "sep_1": ","}
+GEO_COLUMNS = {
+    "Cod_setor": "[GEO]_ID_CENSUS_TRACT",
+    "Cod_Grandes Regiões": "[GEO]_ID_REGION",
+    "Cod_Grandes Regiäes": "[GEO]_ID_REGION",  # There is a typo in TO -> BASICO.csv
+    "Nome_Grande_Regiao": "[GEO]_REGION",
+    "Cod_UF": "[GEO]_ID_UF",
+    "Nome_da_UF ": "[GEO]_UF",
+    "Cod_meso": "[GEO]_ID_MESO_REGION",
+    "Nome_da_meso": "[GEO]_MESO_REGION",
+    "Cod_micro": "[GEO]_ID_MICRO_REGION",
+    "Nome_da_micro": "[GEO]_MICRO_REGION",
+    "Cod_RM": "[GEO]_ID_RM",
+    "Nome_da_RM": "[GEO]_RM",
+    "Cod_municipio": "[GEO]_ID_CITY",
+    "Nome_do_municipio": "[GEO]_CITY",
+    "Cod_distrito": "[GEO]_ID_DISTRICT",
+    "Nome_do_distrito": "[GEO]_DISTRICT",
+    "Cod_subdistrito": "[GEO]_ID_SUBDISTRICT",
+    "Nome_do_subdistrito": "[GEO]_SUBDISTRICT",
+    "Cod_bairro": "[GEO]_ID_NEIGHBORHOOD",
+    "Nome_do_bairro": "[GEO]_NEIGHBORHOOD",
+}
 
-MAP_BLANK_NULL = {"NULL": 96, "BLANK": 95}
-
-UNIQUE_ID = [
-    "[GEO]_ID_TSE_CITY",
-    "[GEO]_ID_POLLING_ZONE",
-    "[GEO]_ID_POLLING_PLACE",
-    "[GEO]_ID_POLLING_SECTION",
-]
-
-MAP_COL_RENAME = {
-    "SG_ UF": "[GEO]_UF",
-    "CD_MUNICIPIO": "[GEO]_ID_TSE_CITY",
-    "NM_MUNICIPIO": "[GEO]_CITY",
-    "NR_ZONA": "[GEO]_ID_POLLING_ZONE",
-    "NR_SECAO": "[GEO]_ID_POLLING_SECTION",
-    "NR_LOCAL_VOTACAO": "[GEO]_ID_POLLING_PLACE",
-    "CD_CARGO_PERGUNTA": "[ELECTION]_ID_CANDIDACY_POSITION",
-    "QT_APTOS": "[ELECTION]_ELECTORATE",
-    "QT_COMPARECIMENTO": "[ELECTION]_TURNOUT",
-    "QT_ABSTENCOES": "[ELECTION]_ABSTENTIONS",
-    "NR_VOTAVEL": "[ELECTION]_ID_CANDIDATE",
-    "QT_VOTOS": "[ELECTION]_VOTES",
-    "QT_ELEITORES_BIOMETRIA_NH": "[ELECTION]_ELECTORATE_BIOMETRIA",
+AGGR_COL_MAP = {
+    "census tract": "[GEO]_ID_CENSUS_TRACT",
+    "neighborhood": "[GEO]_ID_NEIGHBORHOOD",
+    "subdistrict": "[GEO]_ID_SUBDISTRICT",
+    "district": "[GEO]_ID_DISTRICT",
+    "city": "[GEO]_ID_CITY",
+    "micro region": "[GEO]_ID_MICRO_REGION",
+    "meso region": "[GEO]_ID_MESO_REGION",
+    "uf": "[GEO]_ID_UF",
 }
 
 
@@ -45,284 +54,218 @@ class Interim(Data):
 
     Attributes
     ----------
-        candidacy_pos: str
-            The candidacy position [presidente, governador]
-        candidates: List[str]
-            List of candidates ids
         aggregation_level: str
             The data geogrephical level of aggrevation
-        geocoding_api: str
-            The geocoding api to be used (Google Maps: GMAPS, OpenStreep Map: OSM)
+        ref_file: str
+            The name of the reference file (Basico.csv)
+        id_col: str
+            The id column
+        char_col_census: str
+            The character to identify census columns
+        char_na_values: str
+            The character used as NA
+        char_decimal: str
+            The decimal separator
     """
 
-    candidacy_pos: str = None
-    candidates: List[str] = field(default_factory=list)
     aggregation_level: str = None
-    geocoding_api: str = None
-    __results_data: pd.DataFrame = field(default_factory=pd.DataFrame)
-    __locations_data: pd.DataFrame = field(default_factory=pd.DataFrame)
-    __list_results_data: List[pd.DataFrame] = field(default_factory=list)
+    ref_file: str = None
+    id_col: str = None
+    char_col_census: str = None
+    char_na_values: str = None
+    char_decimal: str = None
+    __raw_data_path: Optional[str] = None
+    __list_filenames: Optional[str] = None
+    __ref_data: pd.DataFrame = field(default_factory=pd.DataFrame)
+    __raw_data: pd.DataFrame = field(default_factory=pd.DataFrame)
 
-    def _read_results_csv(self, data_filename) -> pd.DataFrame:
-        """Read the polling places.csv file and returns a pandas dataframe"""
-        filepath = join(
-            self._get_process_folder_path(state="raw"),
-            self.data_name,
-            data_filename,
-        )
-        self.__results_data = pd.read_csv(
-            filepath,
-            sep=";",
-            encoding="latin1",
-            na_values=["#NULO#", -1, -3],
+    def _init_raw_data_path(self):
+        """Initialize the raw path attribute"""
+        self.__raw_data_path = self._get_data_name_folders_path(state="raw")
+
+    def _init_list_filename(self, filenames: List[str]):
+        """Initialize the list of filenames"""
+        if not self.__list_filenames:
+            self.__list_filenames = filenames
+
+    @staticmethod
+    def _check_wrong_encoding(data, keys):
+        """Check if the data was read with the correct encoding"""
+        try:
+            if len(keys) > 1:  # If not basico.csv
+                if (
+                    "Cod_Grandes Regiäes" in data.columns
+                ):  # Theres is a typo in TO -> BASICO.CSV
+                    keys.remove("Cod_Grandes Regiões")
+                else:
+                    keys.remove("Cod_Grandes Regiäes")
+
+            data[keys]
+            return True
+        except KeyError:
+            return False
+
+    def _read_data_csv(self, filename: str, encoding: str, sep: str):
+        """Read a csv file using pandas"""
+        return pd.read_csv(
+            filename,
+            sep=sep,
+            encoding=encoding,
+            decimal=self.char_decimal,
+            na_values=self.char_na_values,
+            error_bad_lines=False,
+            warn_bad_lines=False,
             low_memory=False,
         ).infer_objects()
 
-    def _read_locations_csv(self) -> pd.DataFrame:
-        """Reads location csv from processed state folder"""
-        filepath = join(
-            self._get_process_folder_path(state="processed"),
-            "locations",
-            self.aggregation_level,
-            f"locations_{self.geocoding_api}.csv",
-        )
-        self.__locations_data = pd.read_csv(filepath).infer_objects()
-
-    def _rename_cols(self) -> pd.DataFrame:
-        """Rename columns"""
-        self.__results_data.rename(columns=MAP_COL_RENAME, inplace=True)
-        self.__results_data = self.__results_data[MAP_COL_RENAME.values()]
-
-    def _filter_by_candidacy_pos(self):
-        """Filter election results by candidacy position"""
-        self.__results_data = self.__results_data[
-            self.__results_data["[ELECTION]_ID_CANDIDACY_POSITION"]
-            == MAP_CANDIDACY[self.candidacy_pos]
-        ]
-
     @staticmethod
-    def _rename_votes_cols(votes) -> pd.DataFrame:
-        map_rename_cols = {
-            col: f"[ELECTION]_CANDIDATE_{int(col)}"
-            for col in votes.columns
-            if col not in MAP_BLANK_NULL.values() and col
-        }
-        map_rename_cols[MAP_BLANK_NULL["BLANK"]] = "[ELECTION]_BLANK"
-        map_rename_cols[MAP_BLANK_NULL["NULL"]] = "[ELECTION]_NULL"
-        return votes.rename(columns=map_rename_cols)
+    def _get_col_by_tag(df, tag: str):
+        """Get columns from a given tag"""
+        return [c for c in df.columns if tag in c]
 
-    def _get_votes_by_candidates(self) -> pd.DataFrame:
-        """Get votes by candadidate"""
-        votes = (
-            self.__results_data.copy()
-            .set_index(UNIQUE_ID + ["[ELECTION]_ID_CANDIDATE"])
-            .unstack(fill_value=0)["[ELECTION]_VOTES"]
-        )[self.candidates + list(MAP_BLANK_NULL.values())]
-
-        return self._rename_votes_cols(votes)
-
-    def _drop_duplicated_rows(self) -> pd.DataFrame:
-        """Drop duplicated section rows from results data"""
-        self.__results_data.drop_duplicates(
-            subset=UNIQUE_ID,
-            inplace=True,
-        )
-
-    def _join_votes(self, votes: pd.DataFrame) -> pd.DataFrame:
-        """Join votes dataframe with results dataframe"""
-        # Index data
-        self.__results_data.set_index(
-            keys=UNIQUE_ID,
-            inplace=True,
-        )
-        # Join votes and data
-        self.__results_data = self.__results_data.join(votes)
-        self.__results_data.reset_index(inplace=True)
-        self.__results_data.drop(
-            [
-                "[ELECTION]_VOTES",
-                "[ELECTION]_ID_CANDIDACY_POSITION",
-                "[ELECTION]_ID_CANDIDATE",
-            ],
-            axis=1,
-            inplace=True,
-        )
-
-    def _create_candidates_shares(self):
-        """Create candidate vote-shares columns"""
-        candidates_cols = self._get_candidate_cols()
-        for col in candidates_cols:
-            self.__results_data[f"{col}_(%)"] = (
-                100
-                * self.__results_data[col]
-                / self.__results_data["[ELECTION]_TURNOUT"]
+    def _read_ref_data(self, folder_path: str):
+        """Read the reference file"""
+        for encoding in ENCODINGS.values():
+            self.__ref_data = self._read_data_csv(
+                filename=os.path.join(folder_path, self.ref_file),
+                encoding=encoding,
+                sep=SEPS["default"],
             )
+            if self._check_wrong_encoding(self.__ref_data, list(GEO_COLUMNS.keys())):
+                break
+        # Rename columns to standardize
+        self.__ref_data.rename(columns=GEO_COLUMNS, inplace=True)
+        # Filter to only geo cols
+        geo_cols = self._get_col_by_tag(df=self.__ref_data, tag="GEO")
+        self.__ref_data = self.__ref_data[geo_cols]
 
-    def _create_blank_null_shares(self):
-        """Create blank and null votes-shares"""
-        self.__results_data["[ELECTION]_NULL_(%)"] = (
-            100
-            * self.__results_data["[ELECTION]_NULL"]
-            / self.__results_data["[ELECTION]_TURNOUT"]
-        )
-        self.__results_data["[ELECTION]_BLANK_(%)"] = (
-            100
-            * self.__results_data["[ELECTION]_BLANK"]
-            / self.__results_data["[ELECTION]_TURNOUT"]
-        )
+    def _read_raw_data(self, filename: str) -> pd.DataFrame:
+        """Read the raw data"""
+        for sep, enc in itertools.product(*[SEPS.values(), ENCODINGS.values()]):
+            self.__raw_data = self._read_data_csv(filename, sep=sep, encoding=enc)
+            if len(self.__raw_data.columns) > 1 and self._check_wrong_encoding(
+                self.__raw_data, [self.id_col]
+            ):
+                break
 
-    def _create_turnout_abstention_shares(self):
-        """Creates turnout and abstention shares"""
-        self.__results_data["[ELECTION]_TURNOUT_(%)"] = (
-            100
-            * self.__results_data["[ELECTION]_TURNOUT"]
-            / self.__results_data["[ELECTION]_ELECTORATE"]
-        )
-        self.__results_data["[ELECTION]_ABSTENTIONS_(%)"] = (
-            100
-            * self.__results_data["[ELECTION]_ABSTENTIONS"]
-            / self.__results_data["[ELECTION]_ELECTORATE"]
-        )
-
-    def _create_shares_attributes(self):
-        """Creates all share attributes"""
-        self._create_candidates_shares()
-        self._create_blank_null_shares()
-        self._create_turnout_abstention_shares()
-
-    def _get_candidate_cols(self):
-        return [c for c in self.__results_data.columns if "CANDIDATE" in c]
-
-    def _drop_na_cols(self) -> pd.DataFrame:
-        """Drop all columns with NaN"""
-        self.__results_data.dropna(axis=1, inplace=True)
-
-    def _drop_na_candidates(self) -> pd.DataFrame:
-        """Drop NaN candidates created as columns"""
-        self.__results_data.dropna(
-            subset=["[ELECTION]_ID_CANDIDATE"], axis=0, inplace=True
-        )
-
-    def _fill_na_electorate_biometry(self) -> pd.DataFrame:
-        """Fill electorate biometry column in results data nans with zero"""
-        self.__results_data["[ELECTION]_ELECTORATE_BIOMETRIA"].fillna(0, inplace=True)
-
-    def _convert_cols_to_str(self) -> pd.DataFrame:
-        """Convert all columns names from results data to str"""
-        self.__results_data.columns = self.__results_data.columns.astype(str)
-
-    def _pre_processing_data(self):
-        """Pre Processing the elections results"""
-        self.logger_info("Pre-processing elections results.")
-        raw_dir = join(self._get_state_folders_path(state="raw"), self.data_name)
-        filenames = self._get_files_in_id(raw_dir)
-        for filename in tqdm(filenames, desc="Pre-Processing", leave=False):
-            # Load raw data
-            self._read_results_csv(filename)
-            self._rename_cols()
-            self._filter_by_candidacy_pos()
-            self._drop_na_candidates()
-            self._fill_na_electorate_biometry()
-            votes = self._get_votes_by_candidates()
-            self._drop_duplicated_rows()
-            self._join_votes(votes)
-            self._drop_na_cols()
-            # Save the data as csv
-            self.__list_results_data.append(self.__results_data.copy())
-
-    def _concatenate_list_results_data(self) -> pd.DataFrame:
-        """Concatenate the election results data in onw"""
-        self.__results_data = pd.concat(self.__list_results_data)
-        self._convert_cols_to_str()
-        self.__list_results_data = []
-
-    def _create_aggregation_map(self) -> Dict[str, str]:
-        """Creates an aggregation map for the results data"""
-        return {
-            col: (
-                "sum"
-                if is_numeric_dtype(self.__results_data[col]) and "_ID_" not in col
-                else "first"
-            )
-            for col in self.__results_data.columns
-        }
-
-    def _get_merging_keys(self) -> List[str]:
-        """Generates the merging keys columns depending on the aggregatiopn level"""
-        merging_keys = {
-            "polling place": [
-                "[GEO]_UF",
-                "[GEO]_CITY",
-                "[GEO]_ID_POLLING_ZONE",
-                "[GEO]_ID_POLLING_PLACE",
-            ],
-            "city": ["[GEO]_UF", "[GEO]_CITY"],
-        }
-        return merging_keys[self.aggregation_level]
-
-    def _aggregate_data(self) -> pd.DataFrame:
-        """Aggregate the results data considering the aggregation level paramenter"""
-        self.logger_info(f"Aggregating data by {self.aggregation_level}.")
-        group_keys = self._get_merging_keys()
-        agg_map = self._create_aggregation_map()
-        self.__results_data = self.__results_data.groupby(by=group_keys).agg(agg_map)
-
-    def _get_not_common_cols(self) -> List[str]:
-        """Get the columns in the location data that does not exist in the results data"""
-        return [
-            col
-            for col in self.__locations_data.columns
-            if col not in self.__results_data.columns
+    def _drop_unecessary_cols(self):
+        """Drop unecessary columns from raw data"""
+        drop_cols = [
+            c
+            for c in self.__raw_data.columns
+            if self.char_col_census not in c and c != self.id_col
         ]
+        unnamed_cols = [c for c in self.__raw_data.columns if "^Unnamed" in c]
+        self.__raw_data.drop(drop_cols + unnamed_cols, axis=1, inplace=True)
 
-    def _merge_results_and_location_data(self):
-        """Merge results data with location data"""
-        self.logger_info("Merging results and location data.")
-        # Load data with geocode information from polling places
-        self._read_locations_csv()
-        merging_keys = self._get_merging_keys()
-        self.__locations_data.set_index(merging_keys, inplace=True)
-        not_commom_cols = self._get_not_common_cols()
-        self.__results_data = self.__results_data.join(
-            self.__locations_data[not_commom_cols]
+    def _drop_cols_rows_na_all(self):
+        """Drop rows and columns with 100 NA values from raw data"""
+        self.__raw_data.dropna(how="all", axis=0, inplace=True)
+        self.__raw_data.dropna(how="all", axis=1, inplace=True)
+
+    def _fill_na(self):
+        """Fill the NA with 0 in the raw data"""
+        self.__raw_data.fillna(0, inplace=True)
+
+    def _rename_census_cols(self, filename: str):
+        """Assign tag CENSUS to columns"""
+        new_cols = {
+            c: f"{PREFIX_COL_CENSUS}_{filename}_{c}"
+            for c in self.__raw_data.columns
+            if c != self.id_col
+        }
+        self.__raw_data.rename(columns={**new_cols, **GEO_COLUMNS}, inplace=True)
+
+    def _convert_census_cols(self):
+        """There are some string values in census col that need to be set to nan, infer_objects does not get"""
+        self.__raw_data = self.__raw_data.apply(
+            lambda col: pd.to_numeric(col, errors="coerce"), axis=1
         )
 
-    def _remove_unecessary_cols(self):
-        """Remove unecessary cols"""
-        unecessary_cols = {
-            "city": [col for col in self.__results_data if "POLLING" in col]
+    def _add_geo_cols(self):
+        """Merge ref data with raw data"""
+        self.__raw_data = self.__ref_data.merge(
+            self.__raw_data, on=GEO_COLUMNS[self.id_col], how="left"
+        )
+
+    def _create_aggregate_map(self):
+        """Create aggregate map"""
+        geo_cols = {
+            c: "first"
+            for c in self.__raw_data.columns
+            if "[GEO]" in c and c != AGGR_COL_MAP[self.aggregation_level]
         }
-        if unecessary_cols.get(self.aggregation_level):
-            self.__results_data.drop(
-                unecessary_cols.get(self.aggregation_level), axis=1, inplace=True
+        census_cols = {c: "sum" for c in self.__raw_data.columns if "[CENSUS]" in c}
+        return {**geo_cols, **census_cols}
+
+    def _get_aggr_col(self):
+        """Returns aggregation column"""
+        return AGGR_COL_MAP[self.aggregation_level]
+
+    def _aggregate_data(self):
+        """Aggregate the raw data by aggregation level"""
+        agg_map = self._create_aggregate_map()
+        aggr_col = self._get_aggr_col()
+        self.__raw_data = self.__raw_data.groupby(by=aggr_col, as_index=False).agg(
+            func=agg_map
+        )
+
+    def _save_data(self, filename: str):
+        """Save raw data"""
+        self.__raw_data.to_csv(os.path.join(self.cur_dir, filename), index=False)
+
+    def _preprocessing(self):
+        """Preprocess raw data"""
+        self.logger_info("Pre-processing data.")
+        folders = self._get_folders_in_dir(directory=self.__raw_data_path)
+        for folder in tqdm(folders, desc="Pre-Processing", leave=False):
+            self._mkdir(folder)  # Create interim folder
+            folder_path = os.path.join(self.__raw_data_path, folder)
+            self._read_ref_data(folder_path=folder_path)
+            filenames = self._get_files_in_dir(folder_path)
+            self._init_list_filename(filenames)
+            # Associate the codes to each file in filenames
+            for filename in filenames:
+                # Load raw data
+                filepath = os.path.join(folder_path, filename)
+                self._read_raw_data(filename=filepath)
+                self._drop_unecessary_cols()
+                self._drop_cols_rows_na_all()
+                self._convert_census_cols()
+                self._fill_na()
+                self._rename_census_cols(filename=filename.split(".")[0])
+                self._add_geo_cols()
+                self._aggregate_data()
+                self._save_data(filename)
+            self.cur_dir = os.path.join(
+                self._get_state_folders_path("interim"),
+                self.data_name,
+                self.aggregation_level,
             )
 
-    def _save_results_data(self):
-        """Save results data"""
-        self.__results_data.to_csv(
-            join(self.cur_dir, f"data_{self.geocoding_api}.csv"), index=False
-        )
-
-    def _generate_pandas_profiling(self):
-        """Generates pandas profiling"""
-        self.logger_info("Generating profiling.")
-        self.__results_data.reset_index(drop=True, inplace=True)
-        profiling = ProfileReport(df=self.__results_data, minimal=True)
-        profiling.to_file(join(self.cur_dir, "profiling.html"))
+    def concat_data(self):
+        """Concatenate census by file name"""
+        folders = self._get_folders_in_dir(directory=self.__raw_data_path)
+        for filename in self.__list_filenames:
+            df_list = []
+            self.logger_info(f"Concatenating files: {filename}")
+            for folder in tqdm(folders, desc="Concatenating", leave=False):
+                folder_path = os.path.join(self.cur_dir, folder)
+                data = pd.read_csv(
+                    os.path.join(folder_path, filename), encoding="utf-8"
+                )
+                df_list.append(data)
+            concat_df = pd.concat(df_list, axis=0)
+            # Save the concatenated data
+            concat_df.to_csv(os.path.join(self.cur_dir, filename), index=False)
+        self._remove_folders_from_cur_dir()
 
     def run(self):
         """Run interim process"""
-        self.init_logger_name(msg="Results (Interim)")
+        self.init_logger_name(msg="Census (Interim)")
         self.init_state(state="interim")
         self.logger_info("Generating interim data.")
-        self._make_folders(
-            folders=[self.data_name, self.aggregation_level, self.candidacy_pos.lower()]
-        )
-        self._pre_processing_data()
-        self._concatenate_list_results_data()
-        self._aggregate_data()
-        self._create_shares_attributes()
-        self._merge_results_and_location_data()
-        self._remove_unecessary_cols()
-        self._save_results_data()
-        self._generate_pandas_profiling()
+        self._make_folders(folders=[self.data_name, self.aggregation_level])
+        self._init_raw_data_path()
+        self._preprocessing()
+        self.concat_data()

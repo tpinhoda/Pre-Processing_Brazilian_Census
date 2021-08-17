@@ -8,6 +8,12 @@
     },
     "census": {
         "data_name": "census",
-        "url_data": "https://ftp.ibge.gov.br/Censos/Censo_Demografico_2010/Resultados_do_Universo/Agregados_por_Setores_Censitarios/"
+        "url_data": "https://ftp.ibge.gov.br/Censos/Censo_Demografico_2010/Resultados_do_Universo/Agregados_por_Setores_Censitarios/",
+        "ref_file": "Basico.csv",
+        "id_col": "Cod_setor",
+        "char_col_census": "V",
+        "char_na_values": "X",
+        "char_decimal": ",",
+        "na_threshold": 90
     }   
 }

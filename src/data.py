@@ -1,8 +1,9 @@
 # -*- coding: utf-8 -*-
 """Abstract class to represent Brazilian socioeconomic data."""
 import logging
+import shutil
 from dataclasses import dataclass
-from os import mkdir, listdir, remove, rename
+from os import mkdir, listdir, remove, rename, rmdir
 from os.path import join, isfile
 from abc import ABC, abstractmethod
 from typing import List
@@ -76,34 +77,21 @@ class Data(ABC):
         self._mkdir(folder_name=self.year)
         self._mkdir(folder_name=self.state)
 
-    def _get_process_folder_path(self, state: str) -> str:
-        """Returns the data state path"""
-        return join(
-            self.root_path,
-            self.region,
-            self.org,
-            self.year,
-            state,
-        )
-
     def _get_initial_folders_path(self) -> str:
         """Returns the initial folders path"""
         return join(self.root_path, self.region, self.org)
 
     def _get_year_folders_path(self) -> str:
         """Returns the year folders path"""
-        return join(
-            self.root_path, self.region, self.org, self.year
-        )
+        return join(self.root_path, self.region, self.org, self.year)
 
     def _get_state_folders_path(self, state: str) -> str:
         """Returns the data state path"""
+        return join(self.root_path, self.region, self.org, self.year, state)
+
+    def _get_data_name_folders_path(self, state: str) -> str:
         return join(
-            self.root_path,
-            self.region,
-            self.org,
-            self.year,
-            state
+            self.root_path, self.region, self.org, self.year, state, self.data_name
         )
 
     def _get_files_in_cur_dir(self) -> List[str]:
@@ -113,7 +101,7 @@ class Data(ABC):
             for filename in listdir(self.cur_dir)
             if isfile(join(self.cur_dir, filename))
         ]
-        
+
     def _get_folders_in_cur_dir(self) -> List[str]:
         """Returns a list of folders in the current directory"""
         return [
@@ -122,7 +110,7 @@ class Data(ABC):
             if not isfile(join(self.cur_dir, filename))
         ]
 
-    def _get_files_in_id(self, directory: str) -> List[str]:
+    def _get_files_in_dir(self, directory: str) -> List[str]:
         """Returns a list of filename in directory"""
         return [
             filename
@@ -130,9 +118,22 @@ class Data(ABC):
             if isfile(join(directory, filename))
         ]
 
+    def _get_folders_in_dir(self, directory: str) -> List[str]:
+        """Returns a list of filename in directory"""
+        return [
+            filename
+            for filename in listdir(directory)
+            if not isfile(join(directory, filename))
+        ]
+
     def _remove_file_from_cur_dir(self, filename: str) -> None:
         """Remvoves a filename from the current directory"""
         remove(join(self.cur_dir, filename))
+
+    def _remove_folders_from_cur_dir(self):
+        folders = self._get_folders_in_cur_dir()
+        for folder in folders:
+            shutil.rmtree(join(self.cur_dir, folder), ignore_errors=True)
 
     def _rename_file_from_cur_dir(self, old_filename: str, new_filename: str) -> None:
         """Rename a file from the current dir"""

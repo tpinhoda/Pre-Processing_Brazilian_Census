@@ -28,7 +28,6 @@ class Raw(Data):
     __html: str = None
     __links: List[str] = field(default_factory=list)
 
-
     def _download_html(self) -> None:
         """Donwload the census page"""
         self.__html = urlopen(self.url_data).read().decode("utf-8")
@@ -44,30 +43,36 @@ class Raw(Data):
         self.logger_info("Downloading raw data.")
         if self.__links:
             for link in tqdm(self.__links, desc="Downloading", leave=False):
-                urlretrieve(os.path.join(self.url_data, link), os.path.join(self.cur_dir, link))
+                urlretrieve(
+                    os.path.join(self.url_data, link), os.path.join(self.cur_dir, link)
+                )
         else:
             self.logger_error("No download links, check the url_data parameter.")
             exit()
-        
+
     def _unzip_raw_data(self) -> None:
         """Unzip only the csv raw data in the current directory"""
         self.logger_info("Unzipping raw data.")
         list_filename = self._get_files_in_cur_dir()
         for zip_filename in tqdm(list_filename, desc="Unziping", leave=False):
-            with zipfile.ZipFile(os.path.join(self.cur_dir, zip_filename), "r") as zip_ref:
+            with zipfile.ZipFile(
+                os.path.join(self.cur_dir, zip_filename), "r"
+            ) as zip_ref:
                 self._mkdir(zip_filename.split(".")[0])
                 for member in zip_ref.namelist():
                     filename = os.path.basename(member)
                     if not filename:
                         continue
-                    
+
                     if filename.endswith(".csv"):
                         source = zip_ref.open(member)
                         target = open(os.path.join(self.cur_dir, filename), "wb")
                         with source, target:
                             shutil.copyfileobj(source, target)
-                
-            self.cur_dir = os.path.join(self._get_state_folders_path("raw"), self.data_name)
+
+            self.cur_dir = os.path.join(
+                self._get_state_folders_path("raw"), self.data_name
+            )
 
     def _remove_zip_files(self) -> None:
         """Remove all zip files in the current directory"""
@@ -76,7 +81,7 @@ class Raw(Data):
         for filename in list_filename:
             if filename.endswith(".zip"):
                 self._remove_file_from_cur_dir(filename=filename)
-    
+
     def _remove_empty_folders(self) -> None:
         """Remove empty folders from cur_dir"""
         folders = self._get_folders_in_cur_dir()
@@ -96,7 +101,9 @@ class Raw(Data):
                 self._rename_file_from_cur_dir(
                     old_filename=old_filename, new_filename=new_filename.upper()
                 )
-            self.cur_dir = os.path.join(self._get_state_folders_path("raw"), self.data_name)
+            self.cur_dir = os.path.join(
+                self._get_state_folders_path("raw"), self.data_name
+            )
 
     def _empty_folder_run(self):
         """Run without files in the working directory"""
