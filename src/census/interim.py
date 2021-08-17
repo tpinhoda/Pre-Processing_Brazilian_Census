@@ -193,7 +193,7 @@ class Interim(Data):
         geo_cols = {
             c: "first"
             for c in self.__raw_data.columns
-            if "[GEO]" in c and c != AGGR_COL_MAP[self.aggregation_level]
+            if "[GEO]" in c
         }
         census_cols = {c: "sum" for c in self.__raw_data.columns if "[CENSUS]" in c}
         return {**geo_cols, **census_cols}

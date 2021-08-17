@@ -1,133 +1,67 @@
 """Generates processed data regarding election results"""
-import json
-from os.path import join
+import os
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional
+from tqdm import tqdm
 import pandas as pd
 from src.data import Data
 
+ID_COL_MAP = {
+    "census tract": "[GEO]_ID_CENSUS_TRACT",
+    "neighborhood": "[GEO]_ID_NEIGHBORHOOD",
+    "subdistrict": "[GEO]_ID_SUBDISTRICT",
+    "district": "[GEO]_ID_DISTRICT",
+    "city": "[GEO]_ID_CITY",
+    "micro region": "[GEO]_ID_MICRO_REGION",
+    "meso region": "[GEO]_ID_MESO_REGION",
+    "uf": "[GEO]_ID_UF",
+}
 
 @dataclass
 class Processed(Data):
-    """Represents the Brazilian election results in processed state of processing.
+    """Represents the Brazilian census results in processed state of processing.
 
-    This object pre-processes the Brazilian election results.
+    This object pre-processes the Brazilian census results.
 
     Attributes
     ----------
         aggregation_level: str
             The data geogrephical level of aggrevation
-        candidacy_pos: str
-            The candidacy position [presidente, governador]
-        geocoding_api: str
-            The geocoding api to be used (Google Maps: GMAPS, OpenStreep Map: OSM)
-        levenshtesin_threshold: float
-            The threshold considereing the levenshtein similarity measure of addresses
-        precision_filter: List[str]
-            The list of precision to be filter from the dataset
-        city_limits_fitler: List[str]
-            The list of city limits to be filter from the dataset
     """
 
     aggregation_level: str = None
-    candidacy_pos: str = None
-    geocoding_api: str = None
-    candidates: str = None
-    levenshtein_threshold: float = None
-    precision_filter: List[str] = field(default_factory=list)
-    city_limits_filter: List[str] = field(default_factory=list)
-    __data: pd.DataFrame = field(default_factory=pd.DataFrame)
-    __data_info: Dict = field(default_factory=dict)
-    __per: Optional[int] = None
-
-    def _read_data_csv(self) -> pd.DataFrame:
-        """Read the data.csv file and returns a pandas dataframe"""
-        self.logger_info("Reading interim data.")
-        filepath = join(
-            self._get_process_folder_path(state="interim"),
-            self.data_name,
-            self.aggregation_level,
-            self.candidacy_pos,
-            f"data_{self.geocoding_api}.csv",
-        )
-        self.__data = pd.read_csv(filepath).infer_objects()
-
-    def _remove_external_places(self) -> pd.DataFrame:
-        self.__data = self.__data[self.__data["[GEO]_UF"] != "ZZ"]
-
-    def _get_candidates_cols(self):
-        """Returns the candidates columns"""
-        return [col for col in self.__data if "CANDIDATE" in col]
-
-    def _get_data_info(self):
-        """Returns the interim data basic information"""
-        candidate_cols = self._get_candidates_cols()
-        self.__data_info["size"] = len(self.__data)
-        self.__data_info["turnout"] = self.__data["[ELECTION]_TURNOUT"].sum()
-        self.__data_info["candidates_votes"] = {
-            col: self.__data[col].sum() for col in candidate_cols
-        }
-        self.__data_info["null_votes"] = self.__data["[ELECTION]_NULL"]
-        self.__data_info["null_blank"] = self.__data["[ELECTION]_BLANK"]
-
-    def _filter_data(self):
-        """Filter the dataset according to parameters"""
-        self.logger_info("Filtering dataset by parameters.")
-        self.__data = self.__data[
-            self.__data["[GEO]_LEVENSHTEIN_SIMILARITY"]
-            >= float(self.levenshtein_threshold)
-        ]
-        self.__data = self.__data[
-            self.__data["[GEO]_CITY_LIMITS"].isin(self.city_limits_filter)
-        ]
-        self.__data = self.__data[
-            self.__data["[GEO]_PRECISION"].isin(self.precision_filter)
-        ]
-
-    def _calculate_per(self) -> int:
-        """Calculates the dataset's percentual of electorate representation"""
-        original_turnout = self.__data_info["turnout"]
-        filtered_turnout = self.__data["[ELECTION]_TURNOUT"].sum()
-        self.__per = 100 * filtered_turnout / original_turnout
-
-    def _make_per_fold(self):
-        """Make the per folder"""
-        self._mkdir("PER_{:.2f}".format(self.__per))
-
-    def _save_data(self):
-        """Save the dataset"""
-        self.logger_info("Saving final dataset.")
-        self.__data.to_csv(
-            join(self.cur_dir, f"data_{self.geocoding_api}.csv"), index=False
-        )
-
-    def _generate_report(self):
-        """Generates json report concerning the parameters used to create the dataset"""
-        self.logger_info("Generating final report.")
-        report_dict = {
-            "Levenshtein Threshold": str(self.levenshtein_threshold),
-            "City Limits": self.city_limits_filter,
-            "Precisions": self.precision_filter,
-            "Candidates": self.candidates,
-            "#Rows": f"{len(self.__data)} ({100 * len(self.__data) / self.__data_info['size']}%)",
-        }
-
-        with open(join(self.cur_dir, "parameters.json"), "w") as file:
-            json.dump(report_dict, file, indent=4)
+    threshold_na: float = None
+    __processed_data: pd.DataFrame = field(default_factory=pd.DataFrame)
+    
+    def _drop_duplicated_row_from_merge(self):
+        delete_cols = [c for c in self.__processed_data.columns if "DELETE" in c]
+        self.__processed_data.drop(delete_cols, axis=1, inplace=True)  
+    
+    def _merge_data(self):
+        interim_path =self._get_data_name_folders_path("interim")
+        interim_agg_path = os.path.join(interim_path, self.aggregation_level)
+        filenames = self._get_files_in_dir(interim_agg_path)
+        for filename in tqdm(filenames, desc="Merging data", leave=False):
+            interim_data = pd.read_csv(os.path.join(interim_agg_path, filename), low_memory=False)
+            if not self.__processed_data.empty:
+                self.__processed_data = self.__processed_data.merge(interim_data, on=ID_COL_MAP[self.aggregation_level], how="outer", suffixes=("", "DELETE"))
+            else:
+                self.__processed_data = interim_data.copy()
+        self._drop_duplicated_row_from_merge()
+        
 
     def run(self):
-        """Run process"""
-        self.init_logger_name(msg="Results (Processed)")
+        """Run processed process"""
+        self.init_logger_name(msg="Census (Processed)")
         self.init_state(state="processed")
         self.logger_info("Generating processed data.")
         self._make_folders(
-            folders=[self.data_name, self.aggregation_level, self.candidacy_pos.lower()]
+            folders=[self.data_name, self.aggregation_level]
         )
-        self._read_data_csv()
-        self._remove_external_places()
-        self._get_data_info()
-        self._filter_data()
-        self._calculate_per()
-        self._make_per_fold()
-        self._save_data()
-        self._generate_report()
+        self._merge_data()
+        print(len(self.__processed_data.columns.values))
+        print(len(self.__processed_data))
+        is_NaN = self.__processed_data.isnull()
+        row_has_NaN = is_NaN.any(axis=1)
+        rows_with_NaN = self.__processed_data[row_has_NaN]
+        print(len(rows_with_NaN))
