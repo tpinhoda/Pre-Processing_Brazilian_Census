@@ -42,7 +42,7 @@ class Processed(Data):
         interim_agg_path = os.path.join(interim_path, self.aggregation_level)
         filenames = self._get_files_in_dir(interim_agg_path)
         for filename in tqdm(filenames, desc="Merging data", leave=False):
-            interim_data = pd.read_csv(os.path.join(interim_agg_path, filename), low_memory=False)
+            interim_data = pd.read_csv(os.path.join(interim_agg_path, filename), low_memory=False).infer_objects()
             if not self.__processed_data.empty:
                 self.__processed_data = self.__processed_data.merge(interim_data, on=ID_COL_MAP[self.aggregation_level], how="outer", suffixes=("", "DELETE"))
             else:
@@ -58,6 +58,15 @@ class Processed(Data):
     
     def _fill_na(self):
         self.__processed_data.fillna(0, inplace=True)
+    
+    def _check_income_col(self, col):
+        greater_population = (self.__processed_data["[CENSUS]_DOMICILIO02_V001"] < self.__processed_data[col]).any()
+        greater_domicilies = (self.__processed_data["[CENSUS]_DOMICILIO01_V001"] < self.__processed_data[col]).any()
+        return greater_population & greater_domicilies
+    
+    def _find_income_attributes(self):
+        census_col = [c for c in self.__processed_data if "[CENSUS]" in c]
+        return [col for col in census_col if self._check_income_col(col)]
         
     def run(self):
         """Run processed process"""
@@ -69,5 +78,10 @@ class Processed(Data):
         )
         self._merge_data()
         self._drop_cols_rows_na_all()
+        self.__processed_data = self.__processed_data.convert_dtypes()
+        self._find_income_attributes()
+        print(self.__processed_data.dtypes.value_counts())
+        print(self.__processed_data.select_dtypes(include="string").columns)
+        print(self.__processed_data.select_dtypes(include="float64").columns)
         
         
