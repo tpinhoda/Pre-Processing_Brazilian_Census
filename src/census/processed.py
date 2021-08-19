@@ -1,9 +1,8 @@
-"""Generates processed data regarding election results"""
+"""Generates processed data regarding census results"""
 import os
 from dataclasses import dataclass, field
 from typing import List
 from tqdm import tqdm
-from pandas_profiling import ProfileReport
 import pandas as pd
 from src.data import Data
 
@@ -59,6 +58,7 @@ class Processed(Data):
 
     def _merge_data(self):
         """Merge data from the same filename"""
+        self.logger_info("Merging into a single dataset.")
         interim_path = self._get_data_name_folders_path("interim")
         interim_agg_path = os.path.join(interim_path, self.aggregation_level)
         filenames = self._get_files_in_dir(interim_agg_path)
@@ -78,7 +78,7 @@ class Processed(Data):
         self._drop_duplicated_col_from_merge()
 
     def _drop_cols_rows_na_all(self):
-        """Drop rows and columns with 100 NA values from raw data"""
+        """Drop rows and columns with threshold% NA values from raw data"""
         threshold_na_row = int(
             self.na_threshold * len(self.__processed_data.columns) / 100
         )
@@ -164,6 +164,7 @@ class Processed(Data):
 
     def _normalize_data(self):
         """Normalize processed data"""
+        self.logger_info("Normalizing data.")
         cols_separetated = self._separate_cols_by_description()
         for key, cols in cols_separetated.items():
             self._normalize_by_total(cols=cols, total_col=TOTAL_COLS[key])
@@ -175,6 +176,7 @@ class Processed(Data):
             self._normalize_by_mim_max(cols=min_max_cols)
         else:
             self.__processed_data.drop(min_max_cols, axis=1, inplace=True)
+            self._remove_global_cols()
 
     def _remove_global_cols(self):
         """Remove global features"""
@@ -188,12 +190,13 @@ class Processed(Data):
 
     def _remove_duplicated_cols(self):
         """Remove duplicated columns"""
-        dupli = self.__processed_data.T.duplicated(keep=False)
+        dupli = self.__processed_data.T.duplicated(keep="first")
         dupli_cols = self.__processed_data.T.loc[dupli].index.values
         self.__processed_data.drop(dupli_cols, axis=1, inplace=True)
 
     def _save_data(self):
         """Save processed data"""
+        self.logger_info("Saving final data.")
         self.__processed_data.to_csv(
             os.path.join(self.cur_dir, "data.csv"), index=False
         )
@@ -208,6 +211,5 @@ class Processed(Data):
         self._drop_cols_rows_na_all()
         self.__processed_data = self.__processed_data.convert_dtypes()
         self._normalize_data()
-        self._remove_global_cols()
         self._remove_duplicated_cols()
         self._save_data()
