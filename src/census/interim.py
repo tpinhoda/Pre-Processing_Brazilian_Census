@@ -123,6 +123,10 @@ class Interim(Data):
         """Get columns from a given tag"""
         return [c for c in df.columns if tag in c]
 
+    def _correct_id_uf_cols(self):
+        most_frequent = self.__ref_data["[GEO]_ID_UF"].value_counts().max()
+        self.__ref_data["[GEO]_ID_UF"] = [most_frequent] * len(self.__ref_data)
+
     def _read_ref_data(self, folder_path: str):
         """Read the reference file"""
         for encoding in ENCODINGS.values():
@@ -138,6 +142,7 @@ class Interim(Data):
         # Filter to only geo cols
         geo_cols = self._get_col_by_tag(df=self.__ref_data, tag="GEO")
         self.__ref_data = self.__ref_data[geo_cols]
+        self._correct_id_uf_cols()  # There are some id uf with wrong inputation
 
     def _read_raw_data(self, filename: str) -> pd.DataFrame:
         """Read the raw data"""
@@ -190,11 +195,7 @@ class Interim(Data):
 
     def _create_aggregate_map(self):
         """Create aggregate map"""
-        geo_cols = {
-            c: "first"
-            for c in self.__raw_data.columns
-            if "[GEO]" in c
-        }
+        geo_cols = {c: "first" for c in self.__raw_data.columns if "[GEO]" in c}
         census_cols = {c: "sum" for c in self.__raw_data.columns if "[CENSUS]" in c}
         return {**geo_cols, **census_cols}
 

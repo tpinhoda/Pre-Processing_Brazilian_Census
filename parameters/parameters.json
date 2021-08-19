@@ -14,6 +14,8 @@
         "char_col_census": "V",
         "char_na_values": "X",
         "char_decimal": ",",
-        "na_threshold": 99
+        "na_threshold": 99,
+        "global_cols": 0,
+        "global_threshold": 0.85 
     }   
 }
