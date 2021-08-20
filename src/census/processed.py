@@ -197,9 +197,14 @@ class Processed(Data):
     def _save_data(self):
         """Save processed data"""
         self.logger_info("Saving final data.")
-        self.__processed_data.to_csv(
-            os.path.join(self.cur_dir, "data.csv"), index=False
-        )
+        if self.global_cols:
+            self.__processed_data.to_csv(
+                os.path.join(self.cur_dir, "data_with_global.csv"), index=False
+            )
+        else:
+            self.__processed_data.to_csv(
+                os.path.join(self.cur_dir, "data_no_global.csv"), index=False
+            )
 
     def run(self):
         """Run processed process"""
