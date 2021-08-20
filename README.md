@@ -2,7 +2,7 @@
 
 This project pre-process 2010 Brazilian Census data. First, we download the entire set of CSV data from the IBGE repository. Them we clean the data, padronize the features names, aggregate the data according to a given geographical level and normnalize the data. The result is a single dataset where eache row represents a location at a given aggregation level (i.e, city, state, etc).
 
-::warning The normalization procedures is executed horizontally, meaning that every column is normalized regarding the population size, quantity of domiciles, total income of the location described by the row. In other words, it is a local and NOT global normalization.
+:warning: The normalization procedures is executed horizontally, meaning that every column is normalized regarding the population size, quantity of domiciles, total income of the location described by the row. In other words, it is a local and NOT global normalization.
 
 > ## Setup
 
