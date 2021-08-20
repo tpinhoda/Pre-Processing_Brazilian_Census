@@ -102,6 +102,9 @@ class Processed(Data):
         self.__processed_data.dropna(
             how="all", axis=1, thresh=threshold_na_col, inplace=True
         )
+    
+    def _convert_dtypes(self):
+        self.__processed_data = self.__processed_data.convert_dtypes()
 
     def _fill_na(self):
         """Fill na values"""
@@ -247,7 +250,7 @@ class Processed(Data):
         self._make_folders(folders=[self.data_name, self.aggregation_level])
         self._merge_data()
         self._drop_cols_rows_na_all()
-        self.__processed_data = self.__processed_data.convert_dtypes()
+        self._convert_dtypes()
         self._normalize_data()
         self._remove_duplicated_cols()
         self._remove_uncessary_geo_cols()
