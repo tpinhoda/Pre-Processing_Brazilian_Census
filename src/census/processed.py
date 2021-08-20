@@ -15,15 +15,17 @@ PERSON_PT_TAG = "PESSOA"
 DOMICILE_PT_TAG = "DOMICILIO"
 RESPONSIBLE_PT_TAG = "RESPONSAVEL"
 
-ID_COL_MAP = {
-    "census tract": "[GEO]_ID_CENSUS_TRACT",
-    "neighborhood": "[GEO]_ID_NEIGHBORHOOD",
-    "subdistrict": "[GEO]_ID_SUBDISTRICT",
-    "district": "[GEO]_ID_DISTRICT",
-    "city": "[GEO]_ID_CITY",
-    "micro region": "[GEO]_ID_MICRO_REGION",
-    "meso region": "[GEO]_ID_MESO_REGION",
-    "uf": "[GEO]_ID_UF",
+AGGREGATION_LEVEL_MAP = {
+    "census tract": {"level": 1, "tag": "CENSUS_TRACT"},
+    "neighborhood": {"level": 2, "tag": "NEIGHBORHOOD"},
+    "subdistrict": {"level": 3, "tag": "SUBDISTRICT"},
+    "district": {"level": 4, "tag": "DISTRICT"},
+    "city": {"level": 5, "tag": "CITY"},
+    "micro region": {"level": 6, "tag": "MICRO_REGION"},
+    "meso region": {"level": 7, "tag": "MESO_REGION"},
+    "uf": {"level": 8, "tag": "UF"},
+    "rm": {"level": 9, "tag": "RM"},
+    "region": {"level": 10, "tag": "REGION"},
 }
 
 TOTAL_COLS = {
@@ -63,6 +65,10 @@ class Processed(Data):
         delete_cols = [c for c in self.__processed_data.columns if DELETE_TAG in c]
         self.__processed_data.drop(delete_cols, axis=1, inplace=True)
 
+    def _get_aggregation_level_id_col(self):
+        """Returns the column id associated to the aggregation level"""
+        return f"{GEO_TAG}_ID_{AGGREGATION_LEVEL_MAP[self.aggregation_level]['tag']}"
+
     def _merge_data(self):
         """Merge data from the same filename"""
         self.logger_info("Merging into a single dataset.")
@@ -76,7 +82,7 @@ class Processed(Data):
             if not self.__processed_data.empty:
                 self.__processed_data = self.__processed_data.merge(
                     interim_data,
-                    on=ID_COL_MAP[self.aggregation_level],
+                    on=self._get_aggregation_level_id_col(),
                     how="outer",
                     suffixes=("", DELETE_TAG),
                 )
@@ -201,6 +207,19 @@ class Processed(Data):
         dupli_cols = self.__processed_data.T.loc[dupli].index.values
         self.__processed_data.drop(dupli_cols, axis=1, inplace=True)
 
+    def _remove_uncessary_geo_cols(self):
+        geo_cols = self._get_col_by_tag(GEO_TAG)
+        col_tags = [
+            AGGREGATION_LEVEL_MAP[aggr]["tag"]
+            for aggr in AGGREGATION_LEVEL_MAP
+            if AGGREGATION_LEVEL_MAP[aggr]["level"]
+            >= AGGREGATION_LEVEL_MAP[self.aggregation_level]["level"]
+        ]
+        keep_cols = [c for c in geo_cols if any(tag in c for tag in col_tags)]
+        drop_cols = [c for c in geo_cols if c not in keep_cols]
+        self.__processed_data.drop(drop_cols, axis=1, inplace=True)
+        
+
     def _save_data(self):
         """Save processed data"""
         self.logger_info("Saving final data.")
@@ -213,6 +232,13 @@ class Processed(Data):
                 os.path.join(self.cur_dir, "data_no_global.csv"), index=False
             )
 
+    def _print_desc(self):
+        geo = len([c for c in self.__processed_data.columns if GEO_TAG in c])
+        census = len([c for c in self.__processed_data.columns if CENSUS_TAG in c])
+        print("Features")
+        print(f"GEO: {geo}")
+        print(f"CENSUS: {census}")
+
     def run(self):
         """Run processed process"""
         self.init_logger_name(msg="Census (Processed)")
@@ -224,4 +250,6 @@ class Processed(Data):
         self.__processed_data = self.__processed_data.convert_dtypes()
         self._normalize_data()
         self._remove_duplicated_cols()
+        self._remove_uncessary_geo_cols()
         self._save_data()
+        self._print_desc()
