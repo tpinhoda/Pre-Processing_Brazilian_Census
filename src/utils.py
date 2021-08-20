@@ -1,4 +1,3 @@
-
 """Utility functions"""
 import os
 import json
@@ -40,4 +39,3 @@ def load_json(params_path):
     """Load json file."""
     with open(params_path) as file:
         return json.load(file)
-

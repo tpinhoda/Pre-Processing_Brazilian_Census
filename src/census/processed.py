@@ -6,7 +6,14 @@ from tqdm import tqdm
 import pandas as pd
 from src.data import Data
 
-DOMICILE_TAGS = ["DOMICILIO01", "ENTORNO01", "ENTORNO02"]
+GEO_TAG = "[GEO]"
+CENSUS_TAG = "[CENSUS]"
+DELETE_TAG = "[DELETE]"
+BASIC_TAG = "_BASICO_"
+DOMICILE_TAGS = ["_DOMICILIO01_", "_ENTORNO01_", "_ENTORNO02_"]
+PERSON_PT_TAG = "PESSOA"
+DOMICILE_PT_TAG = "DOMICILIO"
+RESPONSIBLE_PT_TAG = "RESPONSAVEL"
 
 ID_COL_MAP = {
     "census tract": "[GEO]_ID_CENSUS_TRACT",
@@ -53,7 +60,7 @@ class Processed(Data):
 
     def _drop_duplicated_col_from_merge(self):
         """Remove duplicated cols from merged data"""
-        delete_cols = [c for c in self.__processed_data.columns if "DELETE" in c]
+        delete_cols = [c for c in self.__processed_data.columns if DELETE_TAG in c]
         self.__processed_data.drop(delete_cols, axis=1, inplace=True)
 
     def _merge_data(self):
@@ -71,7 +78,7 @@ class Processed(Data):
                     interim_data,
                     on=ID_COL_MAP[self.aggregation_level],
                     how="outer",
-                    suffixes=("", "DELETE"),
+                    suffixes=("", DELETE_TAG),
                 )
             else:
                 self.__processed_data = interim_data.copy()
@@ -101,22 +108,20 @@ class Processed(Data):
     def _check_income_col(self, col):
         """Check if a column describe income"""
         greater_population = (
-            self.__processed_data["[CENSUS]_DOMICILIO02_V001"]
-            < self.__processed_data[col]
+            self.__processed_data[TOTAL_COLS["person"]] < self.__processed_data[col]
         ).any()
         greater_domicilies = (
-            self.__processed_data["[CENSUS]_DOMICILIO01_V001"]
-            < self.__processed_data[col]
+            self.__processed_data[TOTAL_COLS["domicile"]] < self.__processed_data[col]
         ).any()
         return greater_population & greater_domicilies
 
     def _get_income_cols(self):
         """Return income related cols"""
-        census_col = [c for c in self.__processed_data.columns if "[CENSUS]" in c]
+        census_col = [c for c in self.__processed_data.columns if CENSUS_TAG in c]
         return [
             col
             for col in census_col
-            if self._check_income_col(col) and "BASICO" not in col
+            if self._check_income_col(col) and BASIC_TAG not in col
         ]
 
     def _get_domicile_cols(self):
@@ -129,13 +134,15 @@ class Processed(Data):
 
     def _separate_cols_by_description(self):
         """Separate columns by groups"""
-        basic = self._get_col_by_tag(tag="BASICO")
-        geo = self._get_col_by_tag(tag="GEO")
+        basic = self._get_col_by_tag(tag=BASIC_TAG)
+        geo = self._get_col_by_tag(tag=GEO_TAG)
         income = self._get_income_cols()
         income_person = [
-            c for c in income if any(tag in c for tag in ["PESSOA", "RESPONSAVEL"])
+            c
+            for c in income
+            if any(tag in c for tag in [PERSON_PT_TAG, RESPONSIBLE_PT_TAG])
         ]
-        income_domicilie = [c for c in income if "DOMICILIO" in c]
+        income_domicilie = [c for c in income if DOMICILE_PT_TAG in c]
         domicile = self._get_domicile_cols()
         person = [
             c
@@ -168,9 +175,9 @@ class Processed(Data):
         cols_separetated = self._separate_cols_by_description()
         for key, cols in cols_separetated.items():
             self._normalize_by_total(cols=cols, total_col=TOTAL_COLS[key])
-        min_max_cols = self._get_col_by_tag(tag="BASICO") + list(TOTAL_COLS.values())
+        min_max_cols = self._get_col_by_tag(tag=BASIC_TAG) + list(TOTAL_COLS.values())
         if self.global_cols:
-            min_max_cols = self._get_col_by_tag(tag="BASICO") + list(
+            min_max_cols = self._get_col_by_tag(tag=BASIC_TAG) + list(
                 TOTAL_COLS.values()
             )
             self._normalize_by_mim_max(cols=min_max_cols)
@@ -180,7 +187,7 @@ class Processed(Data):
 
     def _remove_global_cols(self):
         """Remove global features"""
-        census_col = self._get_col_by_tag(tag="[CENSUS]")
+        census_col = self._get_col_by_tag(tag=CENSUS_TAG)
         global_cols = [
             c
             for c in census_col

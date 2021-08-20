@@ -18,7 +18,9 @@ def main():
     params = utils.load_json(os.path.join(project_dir, "parameters", "parameters.json"))
     params["global"]["root_path"] = env_var["root_path"]
     # Load switchers
-    switchers = utils.load_json(os.path.join(project_dir, "parameters", "switchers.json"))
+    switchers = utils.load_json(
+        os.path.join(project_dir, "parameters", "switchers.json")
+    )
     # Creates and run the census processing pipeline
     pipeline_locations = Pipeline("census", params, switchers["census"])
     pipeline_locations.run()
