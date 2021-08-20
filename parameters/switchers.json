@@ -1,11 +1,6 @@
     {"census":{
-        "raw":0,
-        "interim":0,
+        "raw":1,
+        "interim":1,
         "processed":1
-    },
-    "idhm":{
-        "raw":0,
-        "interim":0,
-        "processed":0
     }
 }
