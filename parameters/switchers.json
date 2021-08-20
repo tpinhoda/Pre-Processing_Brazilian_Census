@@ -1,6 +1,6 @@
     {"census":{
-        "raw":1,
-        "interim":1,
+        "raw":0,
+        "interim":0,
         "processed":1
     }
 }

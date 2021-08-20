@@ -228,11 +228,15 @@ class Processed(Data):
         self.logger_info("Saving final data.")
         if self.global_cols:
             self.__processed_data.to_csv(
-                os.path.join(self.cur_dir, "data_with_global.csv"), index=False
+                os.path.join(self.cur_dir, "data_with_global.csv"),
+                index=False,
+                encoding="utf-8"
             )
         else:
             self.__processed_data.to_csv(
-                os.path.join(self.cur_dir, "data_no_global.csv"), index=False
+                os.path.join(self.cur_dir, "data_no_global.csv"),
+                index=False,
+                encoding="utf-8"
             )
 
     def _print_desc(self):
