@@ -3,6 +3,7 @@ import os
 from dataclasses import dataclass, field
 from typing import List
 from tqdm import tqdm
+from functools import reduce
 import pandas as pd
 from src.data import Data
 
@@ -75,19 +76,22 @@ class Processed(Data):
         interim_path = self._get_data_name_folders_path("interim")
         interim_agg_path = os.path.join(interim_path, self.aggregation_level)
         filenames = self._get_files_in_dir(interim_agg_path)
-        for filename in tqdm(filenames, desc="Merging data", leave=False):
-            interim_data = pd.read_csv(
-                os.path.join(interim_agg_path, filename), low_memory=False
+        list_data = [
+            pd.read_csv(
+                os.path.join(interim_agg_path, filename), low_memory=True
             ).infer_objects()
-            if not self.__processed_data.empty:
-                self.__processed_data = self.__processed_data.merge(
-                    interim_data,
-                    on=self._get_aggregation_level_id_col(),
-                    how="outer",
-                    suffixes=("", DELETE_TAG),
-                )
-            else:
-                self.__processed_data = interim_data.copy()
+            for filename in tqdm(filenames, desc="Loading data", leave=False)
+        ]
+        df_geo = list_data[0].copy()
+        geo_col = [c for c in df_geo.columns if GEO_TAG in c ]
+        df_geo = df_geo[geo_col]
+        df_geo.set_index(self._get_aggregation_level_id_col(), inplace=True)
+        for df in list_data:
+            df.set_index(self._get_aggregation_level_id_col(), inplace=True)
+            df.drop(columns=geo_col, errors="ignore", inplace=True)
+        
+        list_data.insert(0, df_geo)
+        self.__processed_data = pd.concat(list_data, axis=1)
         self._drop_duplicated_col_from_merge()
 
     def _drop_cols_rows_na_all(self):
@@ -102,7 +106,7 @@ class Processed(Data):
         self.__processed_data.dropna(
             how="all", axis=1, thresh=threshold_na_col, inplace=True
         )
-    
+
     def _convert_dtypes(self):
         self.__processed_data = self.__processed_data.convert_dtypes()
 
@@ -221,7 +225,6 @@ class Processed(Data):
         keep_cols = [c for c in geo_cols if any(tag in c for tag in col_tags)]
         drop_cols = [c for c in geo_cols if c not in keep_cols]
         self.__processed_data.drop(drop_cols, axis=1, inplace=True)
-        
 
     def _save_data(self):
         """Save processed data"""
@@ -230,13 +233,13 @@ class Processed(Data):
             self.__processed_data.to_csv(
                 os.path.join(self.cur_dir, "data_with_global.csv"),
                 index=False,
-                encoding="utf-8"
+                encoding="utf-8",
             )
         else:
             self.__processed_data.to_csv(
                 os.path.join(self.cur_dir, "data_no_global.csv"),
                 index=False,
-                encoding="utf-8"
+                encoding="utf-8",
             )
 
     def _print_desc(self):

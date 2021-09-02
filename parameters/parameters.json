@@ -3,7 +3,7 @@
         "region": "Brazil",
         "org": "IBGE",
         "year": "2010",
-        "aggregation_level": "city"
+        "aggregation_level": "micro region"
         
     },
     "census": {
