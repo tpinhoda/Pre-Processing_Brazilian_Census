@@ -83,13 +83,13 @@ class Processed(Data):
             for filename in tqdm(filenames, desc="Loading data", leave=False)
         ]
         df_geo = list_data[0].copy()
-        geo_col = [c for c in df_geo.columns if GEO_TAG in c ]
+        geo_col = [c for c in df_geo.columns if GEO_TAG in c]
         df_geo = df_geo[geo_col]
         df_geo.set_index(self._get_aggregation_level_id_col(), inplace=True)
         for df in list_data:
             df.set_index(self._get_aggregation_level_id_col(), inplace=True)
             df.drop(columns=geo_col, errors="ignore", inplace=True)
-        
+
         list_data.insert(0, df_geo)
         self.__processed_data = pd.concat(list_data, axis=1)
         self._drop_duplicated_col_from_merge()
