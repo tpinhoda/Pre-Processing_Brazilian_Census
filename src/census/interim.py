@@ -124,7 +124,7 @@ class Interim(Data):
         return [c for c in df.columns if tag in c]
 
     def _correct_id_uf_cols(self):
-        most_frequent = self.__ref_data["[GEO]_ID_UF"].value_counts().max()
+        most_frequent = self.__ref_data["[GEO]_ID_UF"].value_counts().idxmax()
         self.__ref_data["[GEO]_ID_UF"] = [most_frequent] * len(self.__ref_data)
 
     def _read_ref_data(self, folder_path: str):

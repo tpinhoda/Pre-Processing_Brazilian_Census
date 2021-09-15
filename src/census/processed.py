@@ -92,6 +92,7 @@ class Processed(Data):
 
         list_data.insert(0, df_geo)
         self.__processed_data = pd.concat(list_data, axis=1)
+        self.__processed_data.reset_index(inplace=True)
         self._drop_duplicated_col_from_merge()
 
     def _drop_cols_rows_na_all(self):
